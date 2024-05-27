@@ -17,67 +17,101 @@ class NetworkMonitorApp:
     APP_NAME = "NetworkMonitor"
 
     def __init__(self):
-            self.root = tk.Tk()
-            self.root.title("Network Traffic Monitor")
-            self.root.geometry("600x400")
-            self.root.configure(bg='#0D0D0D')  # Dark background
+        self.root = tk.Tk()
+        self.root.title("Network Traffic Monitor")
+        self.root.geometry("600x400")
+        self.root.configure(bg='#0D0D0D')
 
-            # Set the icon for the taskbar and title bar
-            self.root.iconbitmap('network.ico')
+        self.root.iconbitmap('network.ico')
 
-            self.in_color = "#00FFFF"  # Default neon cyan for incoming
-            self.out_color = "#FF00FF"  # Default neon magenta for outgoing
-            self.bg_color = "#0D0D0D"   # Default dark background
-            self.text_color = "#39FF14"  # Default neon green text
+        self.in_color = "#00FFFF"
+        self.out_color = "#FF00FF"
+        self.bg_color = "#0D0D0D"
+        self.text_color = "#39FF14"
 
-            self.load_config()
+        self.load_config()
 
-            style = ttk.Style()
-            style.theme_use('clam')  # Use a modern theme
-            style.configure('TLabel', background=self.bg_color, foreground=self.text_color, font=('Helvetica', 12, 'bold'))  # Neon green text
+        style = ttk.Style()
+        style.theme_use('clam')
+        style.configure('TLabel', background=self.bg_color, foreground=self.text_color, font=('Helvetica', 12, 'bold'))
 
-            self.label_in = ttk.Label(self.root, text="Incoming Traffic: 0 Mbps (Process: None)")
-            self.label_in.pack(padx=10, pady=5)
+        self.label_in = ttk.Label(self.root, text="Incoming Traffic: 0 Mbps (Process: None)")
+        self.label_in.pack(padx=10, pady=5)
 
-            self.label_out = ttk.Label(self.root, text="Outgoing Traffic: 0 Mbps (Process: None)")
-            self.label_out.pack(padx=10, pady=5)
+        self.label_out = ttk.Label(self.root, text="Outgoing Traffic: 0 Mbps (Process: None)")
+        self.label_out.pack(padx=10, pady=5)
 
-            # Initialize plot with cyberpunk aesthetic
-            self.fig, self.ax = plt.subplots()
-            self.fig.patch.set_facecolor(self.bg_color)
-            self.ax.set_facecolor(self.bg_color)
-            self.ax.tick_params(axis='x', colors=self.text_color)
-            self.ax.tick_params(axis='y', colors=self.text_color)
-            self.ax.spines['bottom'].set_color(self.text_color)
-            self.ax.spines['top'].set_color(self.text_color)
-            self.ax.spines['left'].set_color(self.text_color)
-            self.ax.spines['right'].set_color(self.text_color)
-            self.line_in, = self.ax.plot([], [], label='Incoming Traffic (Mbps)', color=self.in_color)
-            self.line_out, = self.ax.plot([], [], label='Outgoing Traffic (Mbps)', color=self.out_color)
-            self.ax.legend(facecolor=self.bg_color, edgecolor=self.text_color, labelcolor=self.text_color)
-            self.ax.set_xlabel('Time (s)', color=self.text_color)
-            self.ax.set_ylabel('Traffic (Mbps)', color=self.text_color)
+        self.fig, self.ax = plt.subplots()
+        self.fig.patch.set_facecolor(self.bg_color)
+        self.ax.set_facecolor(self.bg_color)
+        self.ax.tick_params(axis='x', colors=self.text_color)
+        self.ax.tick_params(axis='y', colors=self.text_color)
+        self.ax.spines['bottom'].set_color(self.text_color)
+        self.ax.spines['top'].set_color(self.text_color)
+        self.ax.spines['left'].set_color(self.text_color)
+        self.ax.spines['right'].set_color(self.text_color)
+        self.line_in, = self.ax.plot([], [], label='Incoming Traffic (Mbps)', color=self.in_color)
+        self.line_out, = self.ax.plot([], [], label='Outgoing Traffic (Mbps)', color=self.out_color)
+        self.ax.legend(facecolor=self.bg_color, edgecolor=self.text_color, labelcolor=self.text_color)
+        self.ax.set_xlabel('Time (s)', color=self.text_color)
+        self.ax.set_ylabel('Traffic (Mbps)', color=self.text_color)
 
-            self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
-            self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
+        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-            self.time_data = []
-            self.in_data = []
-            self.out_data = []
+        self.time_data = []
+        self.in_data = []
+        self.out_data = []
 
-            self.start_time = time.time()
+        self.start_time = time.time()
 
-            self.last_received = 0
-            self.last_sent = 0
+        self.last_received = 0
+        self.last_sent = 0
 
-            self.tray_icon = None
-            self.tray_thread = None
+        self.process_usage = {}
 
-            self.update_network_usage()
+        self.tray_icon = None
+        self.tray_thread = None
 
-            self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
-            self.create_tray_icon()
-            self.create_options_menu()
+        self.initialize_network_usage()
+        self.update_network_usage()
+
+        self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
+        self.create_tray_icon()
+        self.create_options_menu()
+
+    def initialize_network_usage(self):
+        self.process_usage = {}
+        for proc in psutil.process_iter(['pid', 'name']):
+            try:
+                io_counters = proc.io_counters()
+                if io_counters:
+                    self.process_usage[proc.pid] = {
+                        'name': proc.name(),
+                        'initial_read': io_counters.read_bytes,
+                        'initial_write': io_counters.write_bytes,
+                        'recv_per_sec': 0,
+                        'sent_per_sec': 0
+                    }
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+    def update_process_network_usage(self):
+        for pid, usage in list(self.process_usage.items()):
+            try:
+                proc = psutil.Process(pid)
+                io_counters = proc.io_counters()
+                if io_counters:
+                    recv_per_sec = io_counters.read_bytes - usage['initial_read']
+                    sent_per_sec = io_counters.write_bytes - usage['initial_write']
+
+                    self.process_usage[pid]['recv_per_sec'] = recv_per_sec
+                    self.process_usage[pid]['sent_per_sec'] = sent_per_sec
+                    self.process_usage[pid]['initial_read'] = io_counters.read_bytes
+                    self.process_usage[pid]['initial_write'] = io_counters.write_bytes
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                del self.process_usage[pid]
+                continue
 
     def update_network_usage(self):
         current_time = time.time() - self.start_time
@@ -95,19 +129,20 @@ class NetworkMonitorApp:
         self.last_received = counters.bytes_recv
         self.last_sent = counters.bytes_sent
 
-        received_mbps = (received_per_sec * 8) / 1e6  # Convert to Megabits
-        sent_mbps = (sent_per_sec * 8) / 1e6  # Convert to Megabits
+        received_mbps = (received_per_sec * 8) / 1e6
+        sent_mbps = (sent_per_sec * 8) / 1e6
 
         self.in_data.append(received_mbps)
         self.out_data.append(sent_mbps)
 
-        # Find process using most incoming and outgoing bandwidth
-        process_in, process_out = self.get_top_bandwidth_processes()
+        self.update_process_network_usage()
+
+        process_in = max(self.process_usage.items(), key=lambda x: x[1]['recv_per_sec'], default=(None, {'name': 'None'}))[1]['name']
+        process_out = max(self.process_usage.items(), key=lambda x: x[1]['sent_per_sec'], default=(None, {'name': 'None'}))[1]['name']
 
         self.label_in.config(text=f"Incoming Traffic: {received_mbps:.2f} Mbps (Process: {process_in})")
         self.label_out.config(text=f"Outgoing Traffic: {sent_mbps:.2f} Mbps (Process: {process_out})")
 
-        # Update the plot
         self.line_in.set_data(self.time_data, self.in_data)
         self.line_out.set_data(self.time_data, self.out_data)
         self.ax.set_xlim(0, current_time)
@@ -115,46 +150,26 @@ class NetworkMonitorApp:
 
         self.canvas.draw()
 
-        # Update tray icon
         if self.tray_icon:
             self.update_tray_icon(received_mbps, sent_mbps, process_in, process_out)
 
         self.root.after(1000, self.update_network_usage)
 
-    def get_top_bandwidth_processes(self):
-        net_io_by_pid = {}
-        for proc in psutil.process_iter(['pid', 'name']):
-            try:
-                connections = proc.connections(kind='inet')
-                io_counters = proc.io_counters()
-                if connections:
-                    net_io_by_pid[proc.pid] = (proc.name(), io_counters.read_bytes, io_counters.write_bytes)
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                continue
-
-        in_proc = max(net_io_by_pid.items(), key=lambda x: x[1][1], default=(None, [None, 0]))[1][0]
-        out_proc = max(net_io_by_pid.items(), key=lambda x: x[1][2], default=(None, [None, 0]))[1][0]
-
-        return in_proc, out_proc
-
     def create_image(self, received_mbps, sent_mbps, process_in, process_out):
         width = 64
         height = 64
-        image = Image.new('RGB', (width, height), (13, 13, 13))  # Dark background
+        image = Image.new('RGB', (width, height), (13, 13, 13))
         dc = ImageDraw.Draw(image)
 
-        # Draw a simple two-bar graph for received and sent Mbps with chosen colors
         max_height = height - 20
         max_value = max(received_mbps, sent_mbps, 10)
 
         recv_height = int((received_mbps / max_value) * max_height)
         sent_height = int((sent_mbps / max_value) * max_height)
 
-        # Draw the bars
         dc.rectangle([10, height - recv_height, 30, height], fill=self.in_color)
         dc.rectangle([34, height - sent_height, 54, height], fill=self.out_color)
 
-        # Draw the labels
         dc.text((10, height - recv_height - 15), "In", fill=self.in_color)
         dc.text((34, height - sent_height - 15), "Out", fill=self.out_color)
 
@@ -169,7 +184,6 @@ class NetworkMonitorApp:
         icon_image = self.create_image(0, 0, "None", "None")
         self.tray_icon = pystray.Icon("NetworkMonitor", icon_image, "Network Monitor", menu=pystray.Menu(
             pystray.MenuItem("Show", self.show_window),
-            pystray.MenuItem("Options", self.show_options_menu),  # Add an "Options" menu item
             pystray.MenuItem("Exit", self.exit_app)
         ))
         self.tray_thread = threading.Thread(target=self.tray_icon.run, daemon=True)
@@ -188,100 +202,88 @@ class NetworkMonitorApp:
         self.root.quit()
 
     def create_options_menu(self):
-        self.options_window = tk.Toplevel(self.root)
-        self.options_window.title("Options")
-        self.options_window.geometry("350x250")
-        self.options_window.configure(bg=self.bg_color)
-        self.options_window.withdraw()
+        menubar = tk.Menu(self.root)
+        options_menu = tk.Menu(menubar, tearoff=0)
+        options_menu.add_command(label="Change Incoming Color", command=self.change_incoming_color)
+        options_menu.add_command(label="Change Outgoing Color", command=self.change_outgoing_color)
+        options_menu.add_command(label="Change Background Color", command=self.change_background_color)
+        options_menu.add_command(label="Change Text Color", command=self.change_text_color)
+        options_menu.add_command(label="Toggle Startup", command=self.toggle_startup)
+        menubar.add_cascade(label="Options", menu=options_menu)
+        self.root.config(menu=menubar)
 
-        ttk.Label(self.options_window, text="Incoming Traffic Color:").grid(row=0, column=0, padx=10, pady=5)
-        self.in_color_canvas = tk.Canvas(self.options_window, width=25, height=25, bg="white", highlightthickness=0)
-        self.in_color_canvas.grid(row=0, column=1, padx=10, pady=5)
-        self.create_color_square(self.in_color_canvas, self.in_color)
-        self.in_color_button = ttk.Button(self.options_window, text="Choose Color", command=lambda: self.choose_color('in'))
-        self.in_color_button.grid(row=0, column=2, padx=5, pady=5)
-
-        ttk.Label(self.options_window, text="Outgoing Traffic Color:").grid(row=1, column=0, padx=10, pady=5)
-        self.out_color_canvas = tk.Canvas(self.options_window, width=25, height=25, bg="white", highlightthickness=0)
-        self.out_color_canvas.grid(row=1, column=1, padx=10, pady=5)
-        self.create_color_square(self.out_color_canvas, self.out_color)
-        self.out_color_button = ttk.Button(self.options_window, text="Choose Color", command=lambda: self.choose_color('out'))
-        self.out_color_button.grid(row=1, column=2, padx=5, pady=5)
-
-        ttk.Label(self.options_window, text="Background Color:").grid(row=2, column=0, padx=10, pady=5)
-        self.bg_color_canvas = tk.Canvas(self.options_window, width=25, height=25, bg="white", highlightthickness=0)
-        self.bg_color_canvas.grid(row=2, column=1, padx=10, pady=5)
-        self.create_color_square(self.bg_color_canvas, self.bg_color)
-        self.bg_color_button = ttk.Button(self.options_window, text="Choose Color", command=lambda: self.choose_color('bg'))
-        self.bg_color_button.grid(row=2, column=2, padx=5, pady=5)
-
-        ttk.Label(self.options_window, text="Text Color:").grid(row=3, column=0, padx=10, pady=5)
-        self.text_color_canvas = tk.Canvas(self.options_window, width=25, height=25, bg="white", highlightthickness=0)
-        self.text_color_canvas.grid(row=3, column=1, padx=10, pady=5)
-        self.create_color_square(self.text_color_canvas, self.text_color)
-        self.text_color_button = ttk.Button(self.options_window, text="Choose Color", command=lambda: self.choose_color('text'))
-        self.text_color_button.grid(row=3, column=2, padx=5, pady=5)
-
-        self.startup_var = tk.BooleanVar()
-        self.startup_check = ttk.Checkbutton(self.options_window, text="Start at Windows Login", variable=self.startup_var, command=self.update_startup)
-        self.startup_check.grid(row=4, columnspan=3, padx=10, pady=10)
-        self.startup_var.set(self.check_startup())
-
-        ttk.Button(self.options_window, text="Close", command=self.hide_options_window).grid(row=5, columnspan=3, padx=10, pady=10)
-
-        self.options_window.protocol("WM_DELETE_WINDOW", self.hide_options_window)
-
-    def create_color_square(self, canvas, color):
-        canvas.create_rectangle(0, 0, 25, 25, fill=color, outline="")
-
-    def show_options_menu(self):
-        self.options_window.deiconify()
-
-    def hide_options_window(self):
-        self.options_window.withdraw()
-
-    def choose_color(self, color_type):
-        color = colorchooser.askcolor(title="Choose Color")[1]
+    def change_incoming_color(self):
+        color = colorchooser.askcolor(title="Choose Incoming Traffic Color")[1]
         if color:
-            if color_type == 'in':
-                self.in_color = color
-            elif color_type == 'out':
-                self.out_color = color
-            elif color_type == 'bg':
-                self.bg_color = color
-            elif color_type == 'text':
-                self.text_color = color
-            self.update_colors()
+            self.in_color = color
+            self.line_in.set_color(self.in_color)
+            self.ax.legend().texts[0].set_color(self.in_color)
+            self.canvas.draw()
 
-    def update_colors(self):
-        self.label_in.config(foreground=self.text_color)
-        self.label_out.config(foreground=self.text_color)
-        self.root.configure(bg=self.bg_color)
+    def change_outgoing_color(self):
+        color = colorchooser.askcolor(title="Choose Outgoing Traffic Color")[1]
+        if color:
+            self.out_color = color
+            self.line_out.set_color(self.out_color)
+            self.ax.legend().texts[1].set_color(self.out_color)
+            self.canvas.draw()
 
-        self.fig.patch.set_facecolor(self.bg_color)
-        self.ax.set_facecolor(self.bg_color)
-        self.ax.tick_params(axis='x', colors=self.text_color)
-        self.ax.tick_params(axis='y', colors=self.text_color)
-        self.ax.spines['bottom'].set_color(self.text_color)
-        self.ax.spines['top'].set_color(self.text_color)
-        self.ax.spines['left'].set_color(self.text_color)
-        self.ax.spines['right'].set_color(self.text_color)
-        self.line_in.set_color(self.in_color)
-        self.line_out.set_color(self.out_color)
+    def change_background_color(self):
+        color = colorchooser.askcolor(title="Choose Background Color")[1]
+        if color:
+            self.bg_color = color
+            self.root.configure(bg=self.bg_color)
+            style = ttk.Style()
+            style.configure('TLabel', background=self.bg_color)
+            self.fig.patch.set_facecolor(self.bg_color)
+            self.ax.set_facecolor(self.bg_color)
+            self.ax.legend().set_facecolor(self.bg_color)
+            self.canvas.draw()
 
-        self.ax.legend(facecolor=self.bg_color, edgecolor=self.text_color, labelcolor=self.text_color)
+    def change_text_color(self):
+        color = colorchooser.askcolor(title="Choose Text Color")[1]
+        if color:
+            self.text_color = color
+            style = ttk.Style()
+            style.configure('TLabel', foreground=self.text_color)
+            self.ax.tick_params(axis='x', colors=self.text_color)
+            self.ax.tick_params(axis='y', colors=self.text_color)
+            for spine in self.ax.spines.values():
+                spine.set_color(self.text_color)
+            for text in self.ax.legend().texts:
+                text.set_color(self.text_color)
+            self.ax.set_xlabel('Time (s)', color=self.text_color)
+            self.ax.set_ylabel('Traffic (Mbps)', color=self.text_color)
+            self.canvas.draw()
 
-        if self.tray_icon:
-            self.update_tray_icon(0, 0, "None", "None")
+    def toggle_startup(self):
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.REGISTRY_PATH, 0, winreg.KEY_SET_VALUE) as key:
+                if self.is_startup_enabled():
+                    winreg.DeleteValue(key, self.APP_NAME)
+                else:
+                    winreg.SetValueEx(key, self.APP_NAME, 0, winreg.REG_SZ, os.path.abspath(__file__))
+        except Exception as e:
+            print(f"Failed to update startup setting: {e}")
 
-        self.update_color_square(self.in_color_canvas, self.in_color)
-        self.update_color_square(self.out_color_canvas, self.out_color)
-        self.update_color_square(self.bg_color_canvas, self.bg_color)
-        self.update_color_square(self.text_color_canvas, self.text_color)
+    def is_startup_enabled(self):
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.REGISTRY_PATH, 0, winreg.KEY_READ) as key:
+                winreg.QueryValueEx(key, self.APP_NAME)
+                return True
+        except FileNotFoundError:
+            return False
 
-    def update_color_square(self, canvas, color):
-        canvas.delete("all")
-        canvas.create_rectangle(0, 0, 25, 25, fill=color, outline="")
+    def load_config(self):
+        try:
+            with open(self.CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+                self.in_color = config.get('in_color', self.in_color)
+                self.out_color = config.get('out_color', self.out_color)
+                self.bg_color = config.get('bg_color', self.bg_color)
+                self.text_color = config.get('text_color', self.text_color)
+        except FileNotFoundError:
+            pass
 
     def save_config(self):
         config = {
@@ -290,42 +292,9 @@ class NetworkMonitorApp:
             'bg_color': self.bg_color,
             'text_color': self.text_color
         }
-        with open(self.CONFIG_FILE, 'w') as config_file:
-            json.dump(config, config_file)
-
-    def load_config(self):
-        if os.path.exists(self.CONFIG_FILE):
-            with open(self.CONFIG_FILE, 'r') as config_file:
-                config = json.load(config_file)
-                self.in_color = config.get('in_color', self.in_color)
-                self.out_color = config.get('out_color', self.out_color)
-                self.bg_color = config.get('bg_color', self.bg_color)
-                self.text_color = config.get('text_color', self.text_color)
-
-    def update_startup(self):
-        if self.startup_var.get():
-            self.add_to_startup()
-        else:
-            self.remove_from_startup()
-
-    def check_startup(self):
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.REGISTRY_PATH, 0, winreg.KEY_READ) as key:
-            try:
-                value, regtype = winreg.QueryValueEx(key, self.APP_NAME)
-                return True
-            except FileNotFoundError:
-                return False
-
-    def add_to_startup(self):
-        exe_path = os.path.realpath(__file__)
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.REGISTRY_PATH, 0, winreg.KEY_WRITE) as key:
-            winreg.SetValueEx(key, self.APP_NAME, 0, winreg.REG_SZ, exe_path)
-
-    def remove_from_startup(self):
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.REGISTRY_PATH, 0, winreg.KEY_WRITE) as key:
-            winreg.DeleteValue(key, self.APP_NAME)
+        with open(self.CONFIG_FILE, 'w') as f:
+            json.dump(config, f)
 
 if __name__ == "__main__":
     app = NetworkMonitorApp()
-    app.root.withdraw()
     app.root.mainloop()
