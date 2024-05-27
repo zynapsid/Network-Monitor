@@ -17,64 +17,67 @@ class NetworkMonitorApp:
     APP_NAME = "NetworkMonitor"
 
     def __init__(self):
-        self.root = tk.Tk()
-        self.root.title("Network Traffic Monitor")
-        self.root.geometry("600x400")
-        self.root.configure(bg='#0D0D0D')  # Dark background
+            self.root = tk.Tk()
+            self.root.title("Network Traffic Monitor")
+            self.root.geometry("600x400")
+            self.root.configure(bg='#0D0D0D')  # Dark background
 
-        self.in_color = "#00FFFF"  # Default neon cyan for incoming
-        self.out_color = "#FF00FF"  # Default neon magenta for outgoing
-        self.bg_color = "#0D0D0D"   # Default dark background
-        self.text_color = "#39FF14"  # Default neon green text
+            # Set the icon for the taskbar and title bar
+            self.root.iconbitmap('network.ico')
 
-        self.load_config()
+            self.in_color = "#00FFFF"  # Default neon cyan for incoming
+            self.out_color = "#FF00FF"  # Default neon magenta for outgoing
+            self.bg_color = "#0D0D0D"   # Default dark background
+            self.text_color = "#39FF14"  # Default neon green text
 
-        style = ttk.Style()
-        style.theme_use('clam')  # Use a modern theme
-        style.configure('TLabel', background=self.bg_color, foreground=self.text_color, font=('Helvetica', 12, 'bold'))  # Neon green text
+            self.load_config()
 
-        self.label_in = ttk.Label(self.root, text="Incoming Traffic: 0 Mbps (Process: None)")
-        self.label_in.pack(padx=10, pady=5)
+            style = ttk.Style()
+            style.theme_use('clam')  # Use a modern theme
+            style.configure('TLabel', background=self.bg_color, foreground=self.text_color, font=('Helvetica', 12, 'bold'))  # Neon green text
 
-        self.label_out = ttk.Label(self.root, text="Outgoing Traffic: 0 Mbps (Process: None)")
-        self.label_out.pack(padx=10, pady=5)
+            self.label_in = ttk.Label(self.root, text="Incoming Traffic: 0 Mbps (Process: None)")
+            self.label_in.pack(padx=10, pady=5)
 
-        # Initialize plot with cyberpunk aesthetic
-        self.fig, self.ax = plt.subplots()
-        self.fig.patch.set_facecolor(self.bg_color)
-        self.ax.set_facecolor(self.bg_color)
-        self.ax.tick_params(axis='x', colors=self.text_color)
-        self.ax.tick_params(axis='y', colors=self.text_color)
-        self.ax.spines['bottom'].set_color(self.text_color)
-        self.ax.spines['top'].set_color(self.text_color)
-        self.ax.spines['left'].set_color(self.text_color)
-        self.ax.spines['right'].set_color(self.text_color)
-        self.line_in, = self.ax.plot([], [], label='Incoming Traffic (Mbps)', color=self.in_color)
-        self.line_out, = self.ax.plot([], [], label='Outgoing Traffic (Mbps)', color=self.out_color)
-        self.ax.legend(facecolor=self.bg_color, edgecolor=self.text_color, labelcolor=self.text_color)
-        self.ax.set_xlabel('Time (s)', color=self.text_color)
-        self.ax.set_ylabel('Traffic (Mbps)', color=self.text_color)
+            self.label_out = ttk.Label(self.root, text="Outgoing Traffic: 0 Mbps (Process: None)")
+            self.label_out.pack(padx=10, pady=5)
 
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
-        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+            # Initialize plot with cyberpunk aesthetic
+            self.fig, self.ax = plt.subplots()
+            self.fig.patch.set_facecolor(self.bg_color)
+            self.ax.set_facecolor(self.bg_color)
+            self.ax.tick_params(axis='x', colors=self.text_color)
+            self.ax.tick_params(axis='y', colors=self.text_color)
+            self.ax.spines['bottom'].set_color(self.text_color)
+            self.ax.spines['top'].set_color(self.text_color)
+            self.ax.spines['left'].set_color(self.text_color)
+            self.ax.spines['right'].set_color(self.text_color)
+            self.line_in, = self.ax.plot([], [], label='Incoming Traffic (Mbps)', color=self.in_color)
+            self.line_out, = self.ax.plot([], [], label='Outgoing Traffic (Mbps)', color=self.out_color)
+            self.ax.legend(facecolor=self.bg_color, edgecolor=self.text_color, labelcolor=self.text_color)
+            self.ax.set_xlabel('Time (s)', color=self.text_color)
+            self.ax.set_ylabel('Traffic (Mbps)', color=self.text_color)
 
-        self.time_data = []
-        self.in_data = []
-        self.out_data = []
+            self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
+            self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-        self.start_time = time.time()
+            self.time_data = []
+            self.in_data = []
+            self.out_data = []
 
-        self.last_received = 0
-        self.last_sent = 0
+            self.start_time = time.time()
 
-        self.tray_icon = None
-        self.tray_thread = None
+            self.last_received = 0
+            self.last_sent = 0
 
-        self.update_network_usage()
+            self.tray_icon = None
+            self.tray_thread = None
 
-        self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
-        self.create_tray_icon()
-        self.create_options_menu()
+            self.update_network_usage()
+
+            self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
+            self.create_tray_icon()
+            self.create_options_menu()
 
     def update_network_usage(self):
         current_time = time.time() - self.start_time
