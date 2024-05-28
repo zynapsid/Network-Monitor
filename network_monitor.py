@@ -21,7 +21,7 @@ class NetworkMonitorApp:
         self.root.title("Network Traffic Monitor")
         self.root.geometry("600x400")
         self.root.configure(bg='#0D0D0D')
-
+        self.root.withdraw()  # Minimize the main window at startup
         self.root.iconbitmap('network.ico')
 
         self.in_color = "#00FFFF"
