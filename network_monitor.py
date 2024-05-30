@@ -259,19 +259,20 @@ class NetworkMonitorApp:
             self.canvas.draw()
 
     def toggle_startup(self):
-        try:
-            script_path = os.path.abspath(__file__)
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.REGISTRY_PATH, 0, winreg.KEY_SET_VALUE) as key:
-                if self.is_startup_enabled():
-                    winreg.DeleteValue(key, self.APP_NAME)
-                    self.startup_enabled.set(False)
-                    print("Startup entry removed")
-                else:
-                    winreg.SetValueEx(key, self.APP_NAME, 0, winreg.REG_SZ, script_path)
-                    self.startup_enabled.set(True)
-                    print(f"Startup entry added: {script_path}")
-        except Exception as e:
-            print(f"Failed to update startup setting: {e}")
+    try:
+        # Assuming the executable is named network_monitor.exe and is located in the same directory as this script
+        exe_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dist', 'network_monitor.exe')
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.REGISTRY_PATH, 0, winreg.KEY_SET_VALUE) as key:
+            if self.is_startup_enabled():
+                winreg.DeleteValue(key, self.APP_NAME)
+                self.startup_enabled.set(False)
+                print("Startup entry removed")
+            else:
+                winreg.SetValueEx(key, self.APP_NAME, 0, winreg.REG_SZ, exe_path)
+                self.startup_enabled.set(True)
+                print(f"Startup entry added: {exe_path}")
+    except Exception as e:
+        print(f"Failed to update startup setting: {e}")
 
     def is_startup_enabled(self):
         try:
