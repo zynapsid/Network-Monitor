@@ -78,6 +78,8 @@ class NetworkMonitorApp:
 
         self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
         self.create_tray_icon()
+        self.startup_enabled = tk.BooleanVar()
+        self.startup_enabled.set(self.is_startup_enabled())
         self.create_options_menu()
 
     def initialize_network_usage(self):
@@ -208,7 +210,7 @@ class NetworkMonitorApp:
         options_menu.add_command(label="Change Outgoing Color", command=self.change_outgoing_color)
         options_menu.add_command(label="Change Background Color", command=self.change_background_color)
         options_menu.add_command(label="Change Text Color", command=self.change_text_color)
-        options_menu.add_command(label="Toggle Startup", command=self.toggle_startup)
+        options_menu.add_checkbutton(label="Toggle Startup", command=self.toggle_startup, variable=self.startup_enabled)
         menubar.add_cascade(label="Options", menu=options_menu)
         self.root.config(menu=menubar)
 
@@ -258,11 +260,16 @@ class NetworkMonitorApp:
 
     def toggle_startup(self):
         try:
+            script_path = os.path.abspath(__file__)
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.REGISTRY_PATH, 0, winreg.KEY_SET_VALUE) as key:
                 if self.is_startup_enabled():
                     winreg.DeleteValue(key, self.APP_NAME)
+                    self.startup_enabled.set(False)
+                    print("Startup entry removed")
                 else:
-                    winreg.SetValueEx(key, self.APP_NAME, 0, winreg.REG_SZ, os.path.abspath(__file__))
+                    winreg.SetValueEx(key, self.APP_NAME, 0, winreg.REG_SZ, script_path)
+                    self.startup_enabled.set(True)
+                    print(f"Startup entry added: {script_path}")
         except Exception as e:
             print(f"Failed to update startup setting: {e}")
 
@@ -272,6 +279,9 @@ class NetworkMonitorApp:
                 winreg.QueryValueEx(key, self.APP_NAME)
                 return True
         except FileNotFoundError:
+            return False
+        except Exception as e:
+            print(f"Error checking startup setting: {e}")
             return False
 
     def load_config(self):
