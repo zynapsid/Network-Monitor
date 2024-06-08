@@ -92,31 +92,27 @@ class NetworkMonitorApp:
                         'name': proc.name(),
                         'initial_read': io_counters.read_bytes,
                         'initial_write': io_counters.write_bytes,
-                        'recv_bytes': 0,
-                        'sent_bytes': 0
+                        'recv_per_sec': 0,
+                        'sent_per_sec': 0
                     }
-            except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError):
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
 
     def update_process_network_usage(self):
-        for proc in psutil.process_iter(['pid', 'name', 'io_counters']):
+        for pid, usage in list(self.process_usage.items()):
             try:
+                proc = psutil.Process(pid)
                 io_counters = proc.io_counters()
                 if io_counters:
-                    if proc.pid in self.process_usage:
-                        recv_bytes = io_counters.read_bytes - self.process_usage[proc.pid]['initial_read']
-                        sent_bytes = io_counters.write_bytes - self.process_usage[proc.pid]['initial_write']
-                        self.process_usage[proc.pid]['recv_bytes'] = recv_bytes
-                        self.process_usage[proc.pid]['sent_bytes'] = sent_bytes
-                    else:
-                        self.process_usage[proc.pid] = {
-                            'name': proc.name(),
-                            'initial_read': io_counters.read_bytes,
-                            'initial_write': io_counters.write_bytes,
-                            'recv_bytes': 0,
-                            'sent_bytes': 0
-                        }
-            except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError):
+                    recv_per_sec = io_counters.read_bytes - usage['initial_read']
+                    sent_per_sec = io_counters.write_bytes - usage['initial_write']
+
+                    self.process_usage[pid]['recv_per_sec'] = recv_per_sec
+                    self.process_usage[pid]['sent_per_sec'] = sent_per_sec
+                    self.process_usage[pid]['initial_read'] = io_counters.read_bytes
+                    self.process_usage[pid]['initial_write'] = io_counters.write_bytes
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                del self.process_usage[pid]
                 continue
 
     def update_network_usage(self):
@@ -143,11 +139,8 @@ class NetworkMonitorApp:
 
         self.update_process_network_usage()
 
-        max_recv_proc = max(self.process_usage.items(), key=lambda x: x[1]['recv_bytes'], default=(None, {'name': 'None'}))
-        max_sent_proc = max(self.process_usage.items(), key=lambda x: x[1]['sent_bytes'], default=(None, {'name': 'None'}))
-
-        process_in = max_recv_proc[1]['name']
-        process_out = max_sent_proc[1]['name']
+        process_in = max(self.process_usage.items(), key=lambda x: x[1]['recv_per_sec'], default=(None, {'name': 'None'}))[1]['name']
+        process_out = max(self.process_usage.items(), key=lambda x: x[1]['sent_per_sec'], default=(None, {'name': 'None'}))[1]['name']
 
         self.label_in.config(text=f"Incoming Traffic: {received_mbps:.2f} Mbps (Process: {process_in})")
         self.label_out.config(text=f"Outgoing Traffic: {sent_mbps:.2f} Mbps (Process: {process_out})")
@@ -267,16 +260,17 @@ class NetworkMonitorApp:
 
     def toggle_startup(self):
         try:
-            script_path = os.path.abspath(__file__)
+            # Use the path to the executable created by PyInstaller
+            exe_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dist', 'network_monitor.exe')
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.REGISTRY_PATH, 0, winreg.KEY_SET_VALUE) as key:
                 if self.is_startup_enabled():
                     winreg.DeleteValue(key, self.APP_NAME)
                     self.startup_enabled.set(False)
                     print("Startup entry removed")
                 else:
-                    winreg.SetValueEx(key, self.APP_NAME, 0, winreg.REG_SZ, script_path)
+                    winreg.SetValueEx(key, self.APP_NAME, 0, winreg.REG_SZ, exe_path)
                     self.startup_enabled.set(True)
-                    print(f"Startup entry added: {script_path}")
+                    print(f"Startup entry added: {exe_path}")
         except Exception as e:
             print(f"Failed to update startup setting: {e}")
 
