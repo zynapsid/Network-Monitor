@@ -260,19 +260,22 @@ class NetworkMonitorApp:
 
     def toggle_startup(self):
         try:
-            # Use the path to the executable created by PyInstaller
+            # Use the path to the executable created by cx_Freeze
             exe_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dist', 'network_monitor.exe')
+            exe_path_quoted = f'"{exe_path}"'  # Ensure the path is in quotation marks
+
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.REGISTRY_PATH, 0, winreg.KEY_SET_VALUE) as key:
                 if self.is_startup_enabled():
                     winreg.DeleteValue(key, self.APP_NAME)
                     self.startup_enabled.set(False)
                     print("Startup entry removed")
                 else:
-                    winreg.SetValueEx(key, self.APP_NAME, 0, winreg.REG_SZ, exe_path)
+                    winreg.SetValueEx(key, self.APP_NAME, 0, winreg.REG_SZ, exe_path_quoted)
                     self.startup_enabled.set(True)
-                    print(f"Startup entry added: {exe_path}")
+                    print(f"Startup entry added: {exe_path_quoted}")
         except Exception as e:
             print(f"Failed to update startup setting: {e}")
+
 
     def is_startup_enabled(self):
         try:
